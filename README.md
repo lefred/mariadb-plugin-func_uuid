@@ -45,7 +45,7 @@ MariaDB > select uuid_to_timestamp(uuid());
 +---------------------------+
 1 row in set (0.000 sec)
 
-MariaDB select uuid_to_timestamp(uuid_v7());
+MariaDB > select uuid_to_timestamp(uuid_v7());
 +------------------------------+
 | uuid_to_timestamp(uuid_v7()) |
 +------------------------------+
