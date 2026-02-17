@@ -266,6 +266,7 @@ Query OK, 0 rows affected (0.000 sec)
 
 MariaDB [test]> INSERT INTO t2 VALUES(UUID_v4(), 'a UUID v4');
 ERROR 4025 (23000): CONSTRAINT `t2.uuid` failed for `test`.`t2`
+
 MariaDB [test]> INSERT INTO t2 VALUES(UUID_v7(), 'a UUID v7');
 Query OK, 1 row affected (0.000 sec)
 ```
