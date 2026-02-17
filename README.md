@@ -195,9 +195,12 @@ Rules:
 - `BIN_TO_UUID(bin17)` uses the embedded 17th-byte flag
 - `BIN_TO_UUID(bin16)` uses arg2 if provided, otherwise `uuid_to_bin_swap`
 
+<img width="1358" height="427" alt="Screenshot From 2026-02-17 22-11-19" src="https://github.com/user-attachments/assets/1bd96e52-d04f-4a19-a99c-d43707a2d78f" />
+
+
 ## Errors
 
-Now, when the UUID is valid but it doesn't contain any timestamp like in UUIDv4, NULL is returned, but if the UUID is not valid, an error is still returned:
+Now, when the UUID is valid, but it doesn't contain any timestamp like in UUIDv4, NULL is returned, but if the UUID is not valid, an error is still returned:
 
 ```
 MariaDB > select uuid_to_timestamp(uuid_v4());
@@ -212,7 +215,7 @@ MariaDB > select uuid_to_timestamp("lefred");
 ERROR: 1105 (HY000): uuid_to_timestamp: not a valid UUID
 ```
 
-For `uuid_version()` an error is returned when the argument is not a valid UUID:
+For `uuid_version()`, an error is returned when the argument is not a valid UUID:
 
 ```
 MariaDB > select uuid_version("fred");
@@ -255,7 +258,7 @@ MariaDB [test]> select uuid, uuid_version(uuid) version, uuid_to_timestamp(uuid)
 4 rows in set (0.000 sec)
 ```
 
-We can also use this functions in CHECK CONSTRAINTS. If we want to
+We can also use this function in CHECK CONSTRAINTS. If we want to
 force the use of UUIDv7:
 
 ```
