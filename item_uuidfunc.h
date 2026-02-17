@@ -162,4 +162,75 @@ class Item_func_uuid_version : public Item_int_func
 
 };
 
+class Item_func_uuid_to_bin : public Item_str_func
+{
+    public:
+        Item_func_uuid_to_bin(THD *thd, Item *arg1)
+            : Item_str_func(thd, arg1), swap_bytes(false) {}
+
+        Item_func_uuid_to_bin(THD *thd, Item *arg1, Item *arg2)
+            : Item_str_func(thd, arg1, arg2), swap_bytes(false) {}
+
+        Item *shallow_copy(THD *thd) const override
+        {
+            return do_get_copy(thd);
+        }
+
+        LEX_CSTRING func_name_cstring() const override
+        {
+            static LEX_CSTRING name = {STRING_WITH_LEN("uuid_to_bin") };
+            return name;
+        }
+
+        String *val_str(String *str) override;
+        bool fix_length_and_dec(THD *thd) override
+        {
+            fix_char_length(17);
+            return FALSE;
+        }
+
+        Item *do_get_copy(THD *thd) const
+        {
+            return get_item_copy<Item_func_uuid_to_bin>(thd, this);
+        }
+
+    private:
+        bool swap_bytes;
+};
+
+class Item_func_bin_to_uuid : public Item_str_func
+{
+    public:
+        Item_func_bin_to_uuid(THD *thd, Item *arg1)
+            : Item_str_func(thd, arg1) {}
+
+        Item_func_bin_to_uuid(THD *thd, Item *arg1, Item *arg2)
+            : Item_str_func(thd, arg1, arg2) {}
+
+        Item *shallow_copy(THD *thd) const override
+        {
+            return do_get_copy(thd);
+        }
+
+        LEX_CSTRING func_name_cstring() const override
+        {
+            static LEX_CSTRING name = {STRING_WITH_LEN("bin_to_uuid") };
+            return name;
+        }
+
+        String *val_str(String *str) override;
+        bool fix_length_and_dec(THD *thd) override
+        {
+            collation.set(DTCollation_numeric());
+            fix_char_length(37);
+            return FALSE;
+        }
+
+        Item *do_get_copy(THD *thd) const
+        {
+            return get_item_copy<Item_func_bin_to_uuid>(thd, this);
+        }
+
+};
+
 #endif

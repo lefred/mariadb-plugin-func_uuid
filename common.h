@@ -27,6 +27,7 @@
 
 #define UNIX_TS_LENGTH (6)
 #define UUID_T_LENGTH (16)
+#define UUID_T_WITH_FLAG (17)
 
 enum TimestampFormat {
     TS_SHORT,
@@ -36,6 +37,8 @@ enum TimestampFormat {
 
 typedef uint8_t uuid_t[UUID_T_LENGTH];
 
+class THD;
+
 extern "C" std::string uuid_to_ts(const std::string &uuid_str, TimestampFormat format = TS_SHORT);
 
 std::string uuidv1_to_ts(const std::string &uuid_str, TimestampFormat format = TS_SHORT);
@@ -43,12 +46,17 @@ std::string uuidv7_to_ts(uuid_t uuid, TimestampFormat format = TS_SHORT);
 
 int return_uuid_version(const std::string &str);
 int string_to_uuid(const std::string &str, uuid_t uuid);
+int uuid_string_to_binary(const std::string &str, uuid_t uuid);
+std::string uuid_binary_to_string(const uuid_t uuid);
+std::string uuid_binary_to_string_swap(const uuid_t uuid);
+int uuid_string_to_binary_swap(const std::string &str, uuid_t uuid);
 
 uint64_t uuid_to_unixts(const std::string &uuid_str);
 bool uuid_to_unixtime(const std::string &uuid_str, uint64_t *out);
 
 bool is_hex_char(char c);
 unsigned char hex_to_byte(char c);
+bool get_uuid_to_bin_swap(THD *thd);
 
 #endif // FUNC_UUID_COMMON_INCLUDED
 

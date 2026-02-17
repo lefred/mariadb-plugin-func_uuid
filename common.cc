@@ -212,6 +212,28 @@ int string_to_uuid(const std::string &str, uuid_t uuid) {
     return 0;
 }
 
+int uuid_string_to_binary(const std::string &str, uuid_t uuid) {
+    if (str.size() != 36) {
+	    return 1;
+    }
+    if (!is_valid_uuid_format_any(str)) {
+        return 1;
+    }
+
+    int idx = 0;
+    for (int i = 0; i < 16; ++i) {
+        if (str[idx] == '-') {
+            ++idx;
+        }
+        if (!is_hex_char(str[idx]) || !is_hex_char(str[idx + 1])) {
+	        return 1;
+        }
+        uuid[i] = (hex_to_byte(str[idx]) << 4) | hex_to_byte(str[idx + 1]);
+        idx += 2;
+    }
+    return 0;
+}
+
 
 std::string uuidv1_to_ts(const std::string &uuid_str, TimestampFormat format) {
     uint64_t timestamp = uuid_to_unixts(uuid_str);
@@ -224,4 +246,75 @@ std::string uuidv7_to_ts(uuid_t uuid, TimestampFormat format) {
         unix_ts |= ((uint64_t)uuid[UNIX_TS_LENGTH - 1 - i]) << (8 * i);
     }
     return get_timestamp(unix_ts, format);
+}
+
+std::string uuid_binary_to_string(const uuid_t uuid) {
+    char buffer[37]; // 36 chars + null terminator
+    snprintf(buffer, sizeof(buffer),
+             "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+             uuid[0], uuid[1], uuid[2], uuid[3],
+             uuid[4], uuid[5],
+             uuid[6], uuid[7],
+             uuid[8], uuid[9],
+             uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]);
+    return std::string(buffer);
+}
+
+int uuid_string_to_binary_swap(const std::string &str, uuid_t uuid) {
+    // First convert normally
+    if (uuid_string_to_binary(str, uuid) != 0) {
+        return 1;
+    }
+
+    // Check if this is a UUID with timestamp (versions 1 or 7)
+    int version = return_uuid_version(str);
+    if (version != 1 && version != 7) {
+        // Not a timestamped UUID, return as-is
+        return 0;
+    }
+
+    // For timestamped UUIDs, swap the time-related bytes
+    // This puts the timestamp at the end for better index performance
+    // In the standard UUID format:
+    // - Bytes 0-3: time_low (4 bytes)
+    // - Bytes 4-5: time_mid (2 bytes)
+    // - Bytes 6-7: time_hi_version (2 bytes)
+    // - Bytes 8-15: clock_seq + node (8 bytes)
+    //
+    // We want: [8-15] + [6-7] + [4-5] + [0-3] for better indexing
+    uuid_t temp;
+    memcpy(temp, uuid, UUID_T_LENGTH);
+
+    // Move clock_seq + node to front (bytes 8-15 -> 0-7)
+    memcpy(uuid + 0, temp + 8, 8);
+    // Move time_hi_version (bytes 6-7 -> 8-9)
+    memcpy(uuid + 8, temp + 6, 2);
+    // Move time_mid (bytes 4-5 -> 10-11)
+    memcpy(uuid + 10, temp + 4, 2);
+    // Move time_low (bytes 0-3 -> 12-15)
+    memcpy(uuid + 12, temp + 0, 4);
+
+    return 0;
+}
+
+std::string uuid_binary_to_string_swap(const uuid_t uuid) {
+    // Reverse the byte swapping that was done in uuid_string_to_binary_swap
+    // Original format: [8-15] + [6-7] + [4-5] + [0-3]
+    // Need to convert back to: [0-3] + [4-5] + [6-7] + [8-15]
+    uuid_t temp;
+    uuid_t result;
+
+    memcpy(temp, uuid, UUID_T_LENGTH);
+
+    // Move time_low (bytes 12-15 -> 0-3)
+    memcpy(result + 0, temp + 12, 4);
+    // Move time_mid (bytes 10-11 -> 4-5)
+    memcpy(result + 4, temp + 10, 2);
+    // Move time_hi_version (bytes 8-9 -> 6-7)
+    memcpy(result + 6, temp + 8, 2);
+    // Move clock_seq + node (bytes 0-7 -> 8-15)
+    memcpy(result + 8, temp + 0, 8);
+
+    // Now convert to string
+    return uuid_binary_to_string(result);
 }
