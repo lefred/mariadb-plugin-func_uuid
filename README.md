@@ -259,7 +259,9 @@ We can also use this functions in CHECK CONSTRAINTS. If we want to
 force the use of UUIDv7:
 
 ```
-MariaDB [test]> CREATE TABLE t2 (uuid CHAR(36) PRIMARY KEY CHECK(uuid_version(uuid) = 7), name VARCHAR(255) NOT NULL);
+MariaDB [test]> CREATE TABLE t2 (uuid CHAR(36) PRIMARY KEY
+                CHECK(uuid_version(uuid) = 7),
+                name VARCHAR(255) NOT NULL);
 Query OK, 0 rows affected (0.000 sec)
 
 MariaDB [test]> INSERT INTO t2 VALUES(UUID_v4(), 'a UUID v4');
