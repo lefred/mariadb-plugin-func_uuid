@@ -23,6 +23,7 @@
 #include <boost/algorithm/string.hpp>
 
 #include <iomanip>
+#include <string>
 
 #define UNIX_TS_LENGTH (6)
 #define UUID_T_LENGTH (16)
@@ -44,7 +45,7 @@ int return_uuid_version(const std::string &str);
 int string_to_uuid(const std::string &str, uuid_t uuid);
 
 uint64_t uuid_to_unixts(const std::string &uuid_str);
-uint64_t uuid_to_unixtime(const std::string &uuid_str);
+bool uuid_to_unixtime(const std::string &uuid_str, uint64_t *out);
 
 bool is_hex_char(char c);
 unsigned char hex_to_byte(char c);

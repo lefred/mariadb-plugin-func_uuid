@@ -121,4 +121,45 @@ class Item_func_uuid_to_unixtime : public Item_longlong_func
 
 };
 
+class Item_func_uuid_version : public Item_int_func
+{
+    public:
+        Item_func_uuid_version(THD *thd, Item *arg1)
+            : Item_int_func(thd, arg1) {}
+
+        Item *shallow_copy(THD *thd) const override
+        {
+            return do_get_copy(thd);
+        }
+
+        LEX_CSTRING func_name_cstring() const override
+        {
+            static LEX_CSTRING name = {STRING_WITH_LEN("uuid_version") };
+            return name;
+        }
+
+        longlong val_int() override;
+        const Type_handler *type_handler() const override
+        {
+            if (unsigned_flag) {
+                return &type_handler_ulong;
+            }
+            return &type_handler_slong;
+        }
+        bool fix_length_and_dec(THD *thd) override
+        {
+            decimals = 0;
+            max_length = 1;
+            set_maybe_null();
+            unsigned_flag = 1;
+            return FALSE;
+        }
+
+        Item *do_get_copy(THD *thd) const
+        {
+            return get_item_copy<Item_func_uuid_version>(thd, this);
+        }
+
+};
+
 #endif

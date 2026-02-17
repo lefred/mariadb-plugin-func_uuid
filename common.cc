@@ -4,8 +4,8 @@
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; version 2 of the License.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
@@ -15,7 +15,24 @@
 
 #include "mariadb.h"
 #include "common.h"
+#include <cctype>
 #include <mysqld_error.h>
+
+bool is_hex_char(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+unsigned char hex_to_byte(char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    } else if (c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    } else if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+    return 0;
+}
+
 
 
 uint64_t uuid_to_unixts(const std::string &uuid_str) {
@@ -51,47 +68,107 @@ uint64_t uuidv7_to_unixts(uuid_t uuid) {
         return unix_ts;
 }
 
-uint64_t uuid_to_unixtime(const std::string &uuid_str) {
+static bool is_valid_uuid_format_any(const std::string &str) {
+    if (str.size() != 36) {
+        return false;
+    }
+    if (str[8] != '-' || str[13] != '-' || str[18] != '-' || str[23] != '-') {
+        return false;
+    }
+    for (size_t i = 0; i < str.size(); ++i) {
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            continue;
+        }
+        if (!is_hex_char(str[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool is_valid_uuid_format_version(const std::string &str, char version) {
+    if (!is_valid_uuid_format_any(str)) {
+        return false;
+    }
+    return str[14] == version;
+}
+
+bool uuid_to_unixtime(const std::string &uuid_str, uint64_t *out) {
+    if (!out) {
+        return false;
+    }
+
     uint64_t unix_ts = 0;
+    if (!is_valid_uuid_format_any(uuid_str)) {
+        my_printf_error(ER_UNKNOWN_ERROR,
+            "uuid_to_unixtime: not a valid UUID",
+            0);
+        return false;
+    }
+
     int uuid_version = return_uuid_version(uuid_str);
     if (uuid_version == 1) {
+        if (!is_valid_uuid_format_version(uuid_str, '1')) {
+            return false;
+        }
         unix_ts = uuid_to_unixts(uuid_str);
     } else if (uuid_version == 7) {
+        if (!is_valid_uuid_format_version(uuid_str, '7')) {
+            return false;
+        }
         uuid_t uuidv7;
-        string_to_uuid(uuid_str, uuidv7);
+        if (string_to_uuid(uuid_str, uuidv7) != 0) {
+            return false;
+        }
         unix_ts = uuidv7_to_unixts(uuidv7);
     } else {
-        my_printf_error(ER_UNKNOWN_ERROR,
-            "uuid_to_timestamp: not a valid UUID or no timestamp available",
-            0);
-        return 0;
+        // Valid UUID without a timestamp (e.g. v4)
+        return false;
     }
-    return unix_ts / 1000;
+
+    *out = unix_ts / 1000;
+    return true;
 }
 
 extern "C" std::string uuid_to_ts(const std::string &uuid_str, TimestampFormat format) {
     std::string out;
+    if (!is_valid_uuid_format_any(uuid_str)) {
+        my_printf_error(ER_UNKNOWN_ERROR,
+            "uuid_to_timestamp: not a valid UUID",
+            0);
+        return "";
+    }
+
     int uuid_version = return_uuid_version(uuid_str);
     if (uuid_version == 1) {
+        if (!is_valid_uuid_format_version(uuid_str, '1')) {
+            return "";
+        }
         out = uuidv1_to_ts(uuid_str, format);
     } else if (uuid_version == 7) {
+        if (!is_valid_uuid_format_version(uuid_str, '7')) {
+            return "";
+        }
         uuid_t uuidv7;
-        string_to_uuid(uuid_str, uuidv7);
+        if (string_to_uuid(uuid_str, uuidv7) != 0) {
+            return "";
+        }
         out = uuidv7_to_ts(uuidv7, format);
     } else {
-        my_printf_error(ER_UNKNOWN_ERROR,
-            "uuid_to_timestamp: not a valid UUID or no timestamp available",
-            0);
+        // Valid UUID without a timestamp (e.g. v4)
         return "";
     }
     return out;
 }
 
 int return_uuid_version(const std::string &str) {
-    if (str.size() != 36) {
+    if (!is_valid_uuid_format_any(str)) {
 	    return -1;
     }
-    return (str[14] - '0');
+    if (!is_hex_char(str[14])) {
+        return -1;
+    }
+    return (str[14] <= '9') ? (str[14] - '0') : (std::tolower(static_cast<unsigned char>(str[14])) - 'a' + 10);
 }
 
 std::string get_timestamp(uint64_t milliseconds, TimestampFormat format = TS_SHORT) {
@@ -111,21 +188,6 @@ std::string get_timestamp(uint64_t milliseconds, TimestampFormat format = TS_SHO
         oss << std::put_time(&timeinfo, "%c %Z");
     }
     return oss.str();
-}
-
-bool is_hex_char(char c) {
-    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-}
-
-unsigned char hex_to_byte(char c) {
-    if (c >= '0' && c <= '9') {
-        return c - '0';
-    } else if (c >= 'a' && c <= 'f') {
-        return c - 'a' + 10;
-    } else if (c >= 'A' && c <= 'F') {
-        return c - 'A' + 10;
-    }
-    return 0;
 }
 
 int string_to_uuid(const std::string &str, uuid_t uuid) {

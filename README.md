@@ -8,7 +8,7 @@ Plugin to extend MariaDB with timestamp decoding from UUIDs when available (v1 a
 MariaDB > install soname 'func_uuid.so';
 Query OK, 0 rows affected (0.0014 sec)
 
-MariaDB > SELECT plugin_name, plugin_type, plugin_library, plugin_description, plugin_author 
+MariaDB > SELECT plugin_name, plugin_type, plugin_library, plugin_description, plugin_author
           FROM information_schema.PLUGINS WHERE PLUGIN_TYPE = 'FUNCTION' and plugin_library='func_uuid.so';
 +------------------------+-------------+----------------+-----------------------------------+---------------+
 | plugin_name            | plugin_type | plugin_library | plugin_description                | plugin_author |
@@ -16,16 +16,18 @@ MariaDB > SELECT plugin_name, plugin_type, plugin_library, plugin_description, p
 | uuid_to_timestamp      | FUNCTION    | func_uuid.so   | Function UUID_TO_TIMESTAMP()      | lefred        |
 | uuid_to_timestamp_long | FUNCTION    | func_uuid.so   | Function UUID_TO_TIMESTAMP_LONG() | lefred        |
 | uuid_to_unixtime       | FUNCTION    | func_uuid.so   | Function UUID_TO_UNIXTIME()       | lefred        |
+| uuid_version           | FUNCTION    | func_uuid.so   | Function UUID_VERSION()           | lefred        |
 +------------------------+-------------+----------------+-----------------------------------+---------------+
-3 rows in set (0.0030 sec)
+4 rows in set (0.001 sec)
 ```
 
-In the error log, we can see: 
+In the error log, we can see:
 
 ```
 2026-02-16 19:42:41 4 [Warning] Plugin 'uuid_to_timestamp' is of maturity level experimental while the server is gamma
 2026-02-16 19:42:41 4 [Warning] Plugin 'uuid_to_timestamp_long' is of maturity level experimental while the server is gamma
 2026-02-16 19:42:41 4 [Warning] Plugin 'uuid_to_unixtime' is of maturity level experimental while the server is gamma
+2026-02-17 11:11:47 3 [Warning] Plugin 'uuid_version' is of maturity level experimental while the server is gamma
 ```
 
 ## Usage
@@ -97,9 +99,9 @@ MariaDB >  select uuid_to_unixtime(uuid_v7());
 +-----------------------------+
 1 row in set (0.000 sec)
 
-MariaDB > select uuid_to_timestamp_long(uuid()) uuidv1, 
-                 from_unixtime(uuid_to_unixtime(uuid_v7())) uuidv7_unix, 
-                 from_unixtime(uuid_to_unixtime(uuid())) uuidv1_unix, 
+MariaDB > select uuid_to_timestamp_long(uuid()) uuidv1,
+                 from_unixtime(uuid_to_unixtime(uuid_v7())) uuidv7_unix,
+                 from_unixtime(uuid_to_unixtime(uuid())) uuidv1_unix,
                  uuid_to_timestamp(uuid_v7()) uuidv7\G
 *************************** 1. row ***************************
      uuidv1: Mon Feb 16 19:45:52 2026 CET
@@ -109,14 +111,105 @@ uuidv1_unix: 2026-02-16 19:45:52
 1 row in set (0.000 sec)
 ```
 
+### uuid_version
+
+This function returns the detected UUID's version. By default only 1, 4 and 7 are valid in MariaDB:
+
+```
+MariaDB > select uuid_version(uuid());
++----------------------+
+| uuid_version(uuid()) |
++----------------------+
+|                    1 |
++----------------------+
+1 row in set (0.000 sec)
+
+MariaDB > select uuid_version(uuid_v4());
++-------------------------+
+| uuid_version(uuid_v4()) |
++-------------------------+
+|                       4 |
++-------------------------+
+1 row in set (0.000 sec)
+
+MariaDB > select uuid_version(uuid_v7());
++-------------------------+
+| uuid_version(uuid_v7()) |
++-------------------------+
+|                       7 |
++-------------------------+
+1 row in set (0.000 sec)
+```
+
 ## Errors
 
-There is a minimal check performed:
+Now, when the UUID is valid but it doesn't contain any timestamp like in UUIDv4, NULL is returned, but if the UUID is not valid, an error is still returned:
 
 ```
 MariaDB > select uuid_to_timestamp(uuid_v4());
-ERROR: 1105 (HY000): uuid_to_timestamp: not a valid UUID or no timestamp available
++------------------------------+
+| uuid_to_timestamp(uuid_v4()) |
++------------------------------+
+| NULL                         |
++------------------------------+
+1 row in set (0.000 sec)
 
 MariaDB > select uuid_to_timestamp("lefred");
-ERROR: 1105 (HY000): uuid_to_timestamp: not a valid UUID or no timestamp available
+ERROR: 1105 (HY000): uuid_to_timestamp: not a valid UUID
+```
+
+For `uuid_version()` an error is returned when the argument is not a valid UUID:
+
+```
+MariaDB > select uuid_version("fred");
+ERROR 1105 (HY000): uuid_version: not a valid UUID
+```
+
+## Example
+
+Let's have a look at this example:
+
+```
+MariaDB [test]> CREATE TABLE t1 (uuid CHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL);
+Query OK, 0 rows affected (0.000 sec)
+
+MariaDB [test]> INSERT INTO t1 VALUES(UUID(), 'first note');
+Query OK, 1 row affected (0.013 sec)
+
+MariaDB [test]> INSERT INTO t1 VALUES(UUID(), 'second note');
+Query OK, 1 row affected (0.001 sec)
+
+MariaDB [test]> INSERT INTO t1 VALUES(UUID_v4(), 'third note');
+Query OK, 1 row affected (0.000 sec)
+
+MariaDB [test]> INSERT INTO t1 VALUES(UUID_v7(), 'fourth note');
+Query OK, 1 row affected (0.000 sec)
+```
+
+And now we can list them:
+
+```
+MariaDB [test]> select uuid, uuid_version(uuid) version, uuid_to_timestamp(uuid), name from t1;
++--------------------------------------+---------+-------------------------+-------------+
+| uuid                                 | version | uuid_to_timestamp(uuid) | name        |
++--------------------------------------+---------+-------------------------+-------------+
+| 207c783b-0be9-11f1-bd09-5e1b9081e705 |       1 | 2026-02-17 11:12:12.550 | first note  |
+| 21f8a2f6-0be9-11f1-bd09-5e1b9081e705 |       1 | 2026-02-17 11:12:15.042 | second note |
+| ccce8c94-187d-4fe8-b5c5-df808e6bc647 |       4 | NULL                    | third note  |
+| 019c6b16-2736-7c48-ba54-b5084ffd51dc |       7 | 2026-02-17 11:12:19.894 | fourth note |
++--------------------------------------+---------+-------------------------+-------------+
+4 rows in set (0.000 sec)
+```
+
+We can also use this functions in CHECK CONSTRAINTS. If we want to
+force the use of UUIDv7:
+
+```
+MariaDB [test]> CREATE TABLE t2 (uuid CHAR(36) PRIMARY KEY CHECK(uuid_version(uuid) = 7), name VARCHAR(255) NOT NULL);
+Query OK, 0 rows affected (0.000 sec)
+
+MariaDB [test]> INSERT INTO t2 VALUES(UUID_v4(), 'a UUID v4');
+ERROR 4025 (23000): CONSTRAINT `t2.uuid` failed for `test`.`t2`
+MariaDB [test]> INSERT INTO t2 VALUES(UUID_v7(), 'a UUID v7');
+Query OK, 1 row affected (0.000 sec)
 ```

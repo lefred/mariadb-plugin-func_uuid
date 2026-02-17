@@ -21,6 +21,7 @@
 #include "m_ctype.h"
 
 #include <cstdio>
+#include <mysqld_error.h>
 
 #include "common.h"
 
@@ -31,6 +32,11 @@ String *Item_func_uuid_to_timestamp::val_str(String *str) {
 
     std::string in_str(uuid_arg->ptr(), uuid_arg->length());
     std::string out_str = uuid_to_ts(in_str);
+
+    if (out_str.empty()) {
+        null_value = true;
+        return nullptr;
+    }
 
     // copy() allocates, copies, sets length, and NUL-terminates
     if (str->copy(out_str.c_str(),
@@ -53,6 +59,11 @@ String *Item_func_uuid_to_timestamp_long::val_str(String *str) {
     std::string in_str(uuid_arg->ptr(), uuid_arg->length());
     std::string out_str = uuid_to_ts(in_str, TS_LONG);
 
+    if (out_str.empty()) {
+        null_value = true;
+        return nullptr;
+    }
+
     if (str->copy(out_str.c_str(), static_cast<uint>(out_str.size()), collation.collation)) {
         null_value = true;
         return nullptr;
@@ -67,9 +78,41 @@ longlong Item_func_uuid_to_unixtime::val_int() {
     // Implement the conversion from UUID to UNIXTIME
     String in_tmp;
     String *uuid_arg = args[0]->val_str(&in_tmp);
+    if (!uuid_arg) {
+        null_value = true;
+        return 0;
+    }
 
     std::string in_str(uuid_arg->ptr(), uuid_arg->length());
-    ulonglong out = uuid_to_unixtime(in_str);
+    uint64_t out = 0;
+    if (!uuid_to_unixtime(in_str, &out)) {
+        null_value = true;
+        return 0;
+    }
 
+    null_value = false;
     return out;
 }
+
+longlong Item_func_uuid_version::val_int() {
+    String in_tmp;
+    String *uuid_arg = args[0]->val_str(&in_tmp);
+    if (!uuid_arg) {
+        null_value = true;
+        return 0;
+    }
+
+    std::string in_str(uuid_arg->ptr(), uuid_arg->length());
+    int version = return_uuid_version(in_str);
+    if (version < 0) {
+        my_printf_error(ER_UNKNOWN_ERROR,
+            "uuid_version: not a valid UUID",
+            0);
+        null_value = true;
+        return 0;
+    }
+
+    null_value = false;
+    return version;
+}
+
